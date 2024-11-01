@@ -393,3 +393,25 @@ class TrafficLight: public TMWorker {
     }
 } trafficLight;
 ```
+VSCode allows you to define snippets which will be inserted when the defined snippet name has been entered.
+Here is a snippet for a TMux Worker class, it can be activated with the entry of tmuxw (for TMux Worker).
+```
+	"TMux Task":{
+		"prefix": "tmuxw",
+		"body": [
+			"class $1: public TMWorker {",
+			"  private:",
+			"",
+			"  public:",
+			"    void setup() {",
+			"    }",
+			"",
+			"    void loop() {",
+			"    }",
+			"",
+			"} $0story1;",
+			""
+		],
+		"description": "Task Multiplexer action template"
+	}
+```
