@@ -18,17 +18,9 @@ private:
   uint8_t m_runNext = 0xff;
 
 public:
-  void process();
-
-  uint8_t add(TMWorker *worker) {
-    if (m_nextFreeSlot < MAX_WORKER) {
-      u_int8_t mySlot = m_nextFreeSlot;
-      m_workerList[m_nextFreeSlot++] = worker;
-      return mySlot;
-    }
-
-    return 0xff;
-  }
+  void loop();
+  void setup();
+  uint8_t add(TMWorker *worker);
 
   void adjustNext(u_int8_t nextSlot) {
     m_runNext = nextSlot;
@@ -36,7 +28,6 @@ public:
 };
 
 TMux tmux;
-
 
 class TMWorker {
 private:
@@ -114,16 +105,15 @@ public:
     }
   }
 
-  virtual void action() {
-
-  }
+  virtual void loop() {}
+  virtual void setup() {};
 };
 
-void TMux::process() {
+void TMux::loop() {
   unsigned long now = millis();
   if (m_runNext != 0xff) {
     if (m_workerList[m_runNext]->checkRun(now)) {
-      m_workerList[m_runNext]->action();
+      m_workerList[m_runNext]->loop();
       m_runNext = 0xff;
       now = millis();
     }
@@ -131,10 +121,28 @@ void TMux::process() {
 
   for (u_int8_t task = 0; task < m_nextFreeSlot; task++) {
     if (m_workerList[task]->checkRun(now)) {
-      m_workerList[task]->action();
+      m_workerList[task]->loop();
       now = millis();
     }
   }
+}
+
+void TMux::setup() {
+  for (u_int8_t task = 0; task < m_nextFreeSlot; task++) {
+    m_workerList[task]->setup();
+  }
+}
+
+
+uint8_t TMux::add(TMWorker *worker) {
+  if (m_nextFreeSlot < MAX_WORKER) {
+    u_int8_t mySlot = m_nextFreeSlot;
+    m_workerList[m_nextFreeSlot++] = worker;
+    worker->setup();
+    return mySlot;
+  }
+
+  return 0xff;
 }
 
 void tmInterupt1() {
