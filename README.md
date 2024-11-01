@@ -57,7 +57,7 @@ Now you can easily execute several storylines with any timing behavior. The dela
 
 # A variant for C++
 
-If you have decided not to create the project in C but in C++, you can put the storylines in their own class. The constructor of the class then registers the storyline in the loop loop itself. The action is stored in a method. I have created a framework for this, which can simply be integrated into the program as #include tmux.hpp. For each storyline, you then create a class that contains the respective actions.
+If you have decided not to create the project in C but in C++, you can put the storylines in their own class. The constructor of the class then registers the storyline in the loop loop itself. The action is stored in a method named loop, similar to the Arduino loop function. I have created a framework for this, which can simply be integrated into the program as #include tmux.hpp. For each storyline, you then create a class that contains the respective actions.
 
 The framework for such a thread can be stored as a template in the development environment and can thus be easily inserted:
 ```
@@ -65,48 +65,52 @@ class Storyline: public TMWorker {
   private:
 
   public:
-    Storyline() {
+    void setup() {
     }
 
-    void action() {
+    void loop() {
     }
 
 } story1;
 ```
-The class must then be given a meaningful name and the constructor must be filled with the code for initialization (analogous to the Setup() function in Arduino). The commands that should be executed at the desired time are then executed in the action() method. The local status is stored in the private: section. Blinky then looks like this:
+The class must then be given a meaningful name and the constructor must be filled with the code for initialization (analogous to the Setup() function in Arduino). The commands that should be executed at the desired time are then executed in the loop() method. The local status is stored in the private: section. Blinky then looks like this:
 ```
 class LEDBlink: public TMWorker {
   private:
     bool m_LEDstate;
 
   public:
-    LEDBlink() {
+    void setup() {
       setDelay(500);
     }
 
-    void action() {
+    void loop() {
       digitalWrite(LED_BUILTIN, m_LEDstate);
       m_LEDstate = !m_LEDstate;
     }
 
 } ledBlink;
 ```
-In the constructor, the waiting time of 500 milliseconds is preset, which should be observed between two calls. In the action method, the LED is then switched on or off, the state is determined via the member variable m_LEDstate.
+In the setup method, the waiting time of 500 milliseconds is preset, which should be observed between two calls. In the loop method, the LED is then switched on or off, the state is determined via the member variable m_LEDstate.
 
 This is initially significantly more code than in the simple version with the time variables. The advantage of this solution is that the individual storylines are better decoupled from each other and it is immediately clear what belongs to each storyline. And most of the code can be inserted automatically using a template. For simple actions, the classes can be placed directly in the main.cpp file. If the actions become more complex and require significantly more code, it can be useful to split them into separate files. This division also ensures that it is clear more quickly what belongs to the respective action or not.
 
 In the constructor, the base class TMWorker ensures that each instance of this class is stored in a list. This is created as an array and not as a list of variable length, since I do not want to use a heap. The array only contains pointers to the instances, so it is not particularly large and can be extended if necessary. The list is stored in a variable tmux, which is automatically created by including the hpp file. However, an understanding of these internals is not necessary to use the class.
 
-On the Arduino side, only the tmux.process() method needs to be called in the loop. This runs through the list of registered processes and executes them one after the other.
+On the Arduino side, only the tmux.loop() method needs to be called in the Arduino loop function and tmux.setup() needs to be called in the setup function. This runs through the list of registered processes and executes them one after the other.
 ```
+void setup() {
+  tmux.setup();
+}
+
 void loop() {
-  tmux.process();
+  tmux.loop();
 }
 ```
 
 # Additional functions
 
-If the times between calls are not constant, the next execution can be set explicitly in the action() method. The changed waiting time then applies to all subsequent calls until the next change.
+If the times between calls are not constant, the next execution can be set explicitly in the loop() method. The changed waiting time then applies to all subsequent calls until the next change.
 ```
 class LEDBlink: public TMWorker {
   private:
@@ -114,15 +118,15 @@ class LEDBlink: public TMWorker {
     int  m_actDelay = 250;
 
   public:
-    LEDBlink() {
+    void setup() {
       setDelay(m_actDelay);
     }
 
-    void action() {
+    void loop() {
       digitalWrite(LED_BUILTIN, m_LEDstate);
       m_LEDstate = !m_LEDstate;
 
-      // Wartezeit bei jedem Durchlauf um 100 Millisekunden verlängern
+      // increase the waiting time with each activation
       m_actDelay += 100;
       setDelay(m_actDelay);
     }
@@ -131,7 +135,7 @@ class LEDBlink: public TMWorker {
 ```
 You can also set a start delay, which ensures that the first call of the action takes place later. This can be useful, for example, if the state of the system should stabilize before a measurement is carried out. The setStartupDelay() method is available for this:
 ```
-    LEDBlink() {
+    void setup() {
       setDelay(250);
       setStartupDelay(3000);
     }
@@ -143,21 +147,21 @@ The Arduino framework supports the use of interrupts to react quickly to externa
 ```
 class InterruptButton: public TMWorker {
   public:
-    InterruptButton() {
+    void setup() {
       pinMode(PA8, INPUT_PULLUP);
       attachWorker(0, PA8, CHANGE);
     }
 
-    void action() {
+    void loop() {
       Serial1.println("Button 2 changed.");
     }
 } interruptButton;
 ```
-In the constructor, the PA8 pin is defined as an input with a pull-up resistor. Using attachWorker, this object is registered as interrupt source 0 for port PA8. CHANGE defines that the interrupt should be executed at every level change. Three interrupt sources (0, 1 and 2) are predefined; if more are required, the hpp file must be adjusted. In the constructor, there is no call to setDelay() - this means that the default waiting time of 'infinite' is used. The action should only be executed when a port change occurs.
+In the setup method, the PA8 pin is defined as an input with a pull-up resistor. Using attachWorker, this object is registered as interrupt source 0 for port PA8. CHANGE defines that the interrupt should be executed at every level change. Three interrupt sources (0, 1 and 2) are predefined; if more are required, the hpp file must be adjusted. In the constructor, there is no call to setDelay() - this means that the default waiting time of 'infinite' is used. The action should only be executed when a port change occurs.
 
 So that the action for an interrupt is executed as quickly as possible, the tmux object saves the action thread with the last active interrupt and executes it first in the next loop, even if it would not be next in the normal order.
 
-Using a state machine
+# Using a state machine
 
 In the simplest case, an action thread periodically executes an action over and over again. In practice, however, it is often more complicated. Depending on the previous history, different actions should be executed. Finite state machines are often used for this purpose. They are easy to implement and can map chains of actions clearly and easily. Such a state machine is essentially made up of two pieces of information: which states are there and which transitions between the states are possible.
 
@@ -178,19 +182,19 @@ class TrafficLight: public TMWorker {
   private:
     TrafficLightStates nextState = INIT;
 ```
-In the constructor, the microcontroller outputs for the LEDs are set. At this point, the state machine should move on to the next state without delay; setDelay(0) takes over this task.
+In the setup method, the microcontroller outputs for the LEDs are set. At this point, the state machine should move on to the next state without delay; setDelay(0) takes over this task.
 
 ```
-    TrafficLight() {
+    void setup() {
       pinMode(TLED_RED, OUTPUT);
       pinMode(TLED_YELLOW, OUTPUT);
       pinMode(TLED_GREEN, OUTPUT);
       setDelay(0);
     }
 ```
-In the action() method there is then the switch statement over the nextState.
+In the loop() method there is then the switch statement over the nextState.
 ```
-    void action() {
+    void loop() {
       switch(nextState) {
 ```
 For each state from the TrafficLightStates there is then a case label within the switch statement. In the INIT state all lights are switched off and the next state is Stop (STOP: Red).
@@ -231,14 +235,14 @@ class TrafficLight: public TMWorker {
     TrafficLightStates nextState = INIT;
 
   public:
-    TrafficLight() {
+    void setup() {
       pinMode(TLED_RED, OUTPUT);
       pinMode(TLED_YELLOW, OUTPUT);
       pinMode(TLED_GREEN, OUTPUT);
       setDelay(0);
     }
 
-    void action() {
+    void loop() {
       switch(nextState) {
         case INIT:
           digitalWrite(TLED_RED, false);
@@ -281,7 +285,7 @@ class TrafficLight: public TMWorker {
 Writing the actions directly into the switch statement only makes sense if the number of states remains small and the respective actions are manageable. Otherwise you get a long switch statement that is confusing and quickly leads to errors. In this case you should outsource each state action to a separate method and only call the respective method from the switch statement.
 
 ```
-    void action() {
+    void loop() {
       switch(nextState) {
         case INIT:
           processInit();
@@ -357,14 +361,14 @@ class TrafficLight: public TMWorker {
     }
     
   public:
-    TrafficLight() {
+    void setup() {
       pinMode(TLED_RED, OUTPUT);
       pinMode(TLED_YELLOW, OUTPUT);
       pinMode(TLED_GREEN, OUTPUT);
       setDelay(0);
     }
 
-    void action() {
+    void loop() {
       switch(nextState) {
         case INIT:
           processInit();
