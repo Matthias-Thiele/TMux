@@ -30,9 +30,7 @@ private:
   unsigned long m_nextRun = 0;
 
 public:
-  TMWorker();
-  TMWorker(unsigned long delay);
-  TMWorker(unsigned long delay, unsigned long startup);
+  TMWorker(unsigned long delay = __UINT32_MAX__, unsigned long startup = 0, unsigned long userParam = 0);
 
   void setDelay(unsigned long delay);
   void setStartupDelay(unsigned long startupDelay);
@@ -43,6 +41,7 @@ protected:
   TMWorker *m_NextInList;
   unsigned long m_delayMillis = __UINT32_MAX__;
   unsigned long m_startup = 0;
+  unsigned long m_userParam = 0;
 
   bool checkRun(unsigned long now);
   virtual void loop() {}

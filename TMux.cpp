@@ -51,7 +51,7 @@ void TMux::loop() {
       nextWorker->loop();
       now = millis();
     }
-    
+
     nextWorker = nextWorker->m_NextInList;
   }
 }
@@ -89,23 +89,6 @@ void TMux::adjustNext(TMWorker *worker) {
  * Implementation of the worker base class.
  */
 
-/**
- * @brief Default constructor, infinite wait time, no startup delay
- * 
- */
-TMWorker::TMWorker() {
-  tmux.add(this);
-}
-
-/**
- * @brief Constructor with defined wait time, no startup delay
- * 
- * @param delay delay between activations in milliseconds
- */
-TMWorker::TMWorker(unsigned long delay) {
-  m_delayMillis = delay;
-  tmux.add(this);
-}
 
 /**
  * @brief Constructor with definied wait time and startup delay
@@ -113,9 +96,11 @@ TMWorker::TMWorker(unsigned long delay) {
  * @param delay delay between activations in milliseconds
  * @param startup delay time before first activation in milliseconds
  */
-TMWorker::TMWorker(unsigned long delay, unsigned long startup) {
+TMWorker::TMWorker(unsigned long delay, unsigned long startup, unsigned long userParam) {
   m_delayMillis = delay;
   m_startup = startup;
+  m_userParam = userParam;
+  
   tmux.add(this);
 }
 
