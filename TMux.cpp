@@ -36,19 +36,23 @@ TMux tmux;
  */
 void TMux::loop() {
   unsigned long now = millis();
-  if (m_runNext != 0xff) {
-    if (m_workerList[m_runNext]->checkRun(now)) {
-      m_workerList[m_runNext]->loop();
-      m_runNext = 0xff;
+  if (m_runInterrupt) {
+    if (m_runInterrupt->checkRun(now)) {
+      m_runInterrupt->loop();
       now = millis();
     }
+
+    m_runInterrupt = NULL;
   }
 
-  for (u_int8_t task = 0; task < m_nextFreeSlot; task++) {
-    if (m_workerList[task]->checkRun(now)) {
-      m_workerList[task]->loop();
+  TMWorker *nextWorker = m_WorkerRoot;
+  while (nextWorker) {
+    if (nextWorker->checkRun(now)) {
+      nextWorker->loop();
       now = millis();
     }
+    
+    nextWorker = nextWorker->m_NextInList;
   }
 }
 
@@ -59,8 +63,10 @@ void TMux::loop() {
  * Activates the setup function of all registered workers.
  */
 void TMux::setup() {
-  for (u_int8_t task = 0; task < m_nextFreeSlot; task++) {
-    m_workerList[task]->setup();
+  TMWorker *nextWorker = m_WorkerRoot;
+  while (nextWorker) {
+    nextWorker->setup();
+    nextWorker = nextWorker->m_NextInList;
   }
 }
 
@@ -70,19 +76,13 @@ void TMux::setup() {
  * @param worker 
  * @return uint8_t Slot number or 0xff on error.
  */
-uint8_t TMux::add(TMWorker *worker) {
-  if (m_nextFreeSlot < MAX_WORKER) {
-    u_int8_t mySlot = m_nextFreeSlot;
-    m_workerList[m_nextFreeSlot++] = worker;
-    worker->setup();
-    return mySlot;
-  }
-
-  return 0xff;
+void TMux::add(TMWorker *worker) {
+  worker->m_NextInList = m_WorkerRoot;
+  m_WorkerRoot = worker;
 }
 
-void TMux::adjustNext(u_int8_t nextSlot) {
-    m_runNext = nextSlot;
+void TMux::adjustNext(TMWorker *worker) {
+    m_runInterrupt = worker;
 }
 
 /**
@@ -94,7 +94,7 @@ void TMux::adjustNext(u_int8_t nextSlot) {
  * 
  */
 TMWorker::TMWorker() {
-  m_mySlot = tmux.add(this);
+  tmux.add(this);
 }
 
 /**
@@ -104,7 +104,7 @@ TMWorker::TMWorker() {
  */
 TMWorker::TMWorker(unsigned long delay) {
   m_delayMillis = delay;
-  m_mySlot = tmux.add(this);
+  tmux.add(this);
 }
 
 /**
@@ -116,7 +116,7 @@ TMWorker::TMWorker(unsigned long delay) {
 TMWorker::TMWorker(unsigned long delay, unsigned long startup) {
   m_delayMillis = delay;
   m_startup = startup;
-  m_mySlot = tmux.add(this);
+  tmux.add(this);
 }
 
 /**
@@ -183,7 +183,7 @@ void TMWorker::attachWorker(u_int8_t interruptId, u_int8_t interruptPin, u_int8_
  */
 void TMWorker::interrupt() {
   m_nextRun = millis();
-  tmux.adjustNext(m_mySlot);
+  tmux.adjustNext(this);
 }
 
 /**
@@ -256,8 +256,6 @@ TMButton::TMButton(int pinNumber, int repeatCount, int delay, int mode) {
     pinMode(pinNumber, INPUT_PULLDOWN);
     m_actState = 0;
   }
-
-  tmux.add(this);
 }
 
 bool TMButton::checkPressed() {
